@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 )
 
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, req *http.Request) {
@@ -29,8 +30,8 @@ func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, req *http.Requ
 		Body string `json:"body"`
 	}
 
-	type isValid struct {
-		Valid bool `json:"valid"`
+	type cleaned struct {
+		CleanedBody string `json:"cleaned_body"`
 	}
 
 	var str toValidate
@@ -41,11 +42,20 @@ func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	if len(str.Body) <= 140 {
-		respondWithJSON(w, 200, isValid{Valid: true})
-	} else {
-		respondWithError(w, 400, "Chirp is too long")
+	badWords := map[string]struct{}{
+		"kerfuffle": {},
+		"sharbert":  {},
+		"fornax":    {},
 	}
+
+	if len(str.Body) > 140 {
+		respondWithError(w, 400, "Chirp is too long")
+		return
+	}
+
+	cleanBody := getCleanedBody(str.Body, badWords)
+
+	respondWithJSON(w, 200, cleaned{CleanedBody: cleanBody})
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
@@ -80,4 +90,16 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(res)
+}
+
+func getCleanedBody(text string, badWords map[string]struct{}) string {
+	words := strings.Fields(text)
+	for i, word := range words {
+		loweredWord := strings.ToLower(word)
+		if _, ok := badWords[loweredWord]; ok {
+			words[i] = "****"
+		}
+	}
+
+	return strings.Join(words, " ")
 }
