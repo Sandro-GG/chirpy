@@ -6,6 +6,9 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/Sandro-GG/chirpy/internal/database"
+	"github.com/google/uuid"
 )
 
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, req *http.Request) {
@@ -27,6 +30,7 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, req *http.Request) {
 
 	err := cfg.db.DeleteUsers(req.Context())
 	if err != nil {
+		log.Printf("Error deleting users: %s", err)
 		respondWithError(w, 500, "Something Went Wrong")
 		return
 	}
@@ -36,20 +40,21 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, req *http.Request) {
+func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Request) {
 	type toValidate struct {
-		Body string `json:"body"`
+		Body   string    `json:"body"`
+		UserID uuid.UUID `json:"user_id"`
 	}
 
 	type cleaned struct {
 		CleanedBody string `json:"cleaned_body"`
 	}
 
-	var str toValidate
+	params := &toValidate{}
 	decoder := json.NewDecoder(req.Body)
-	err := decoder.Decode(&str)
+	err := decoder.Decode(params)
 	if err != nil {
-		respondWithError(w, 500, "Something went wrong")
+		respondWithError(w, 400, "Bad Request")
 		return
 	}
 
@@ -59,14 +64,30 @@ func (cfg *apiConfig) handlerValidateChirp(w http.ResponseWriter, req *http.Requ
 		"fornax":    {},
 	}
 
-	if len(str.Body) > 140 {
+	if len(params.Body) > 140 {
 		respondWithError(w, 400, "Chirp is too long")
 		return
 	}
 
-	cleanBody := getCleanedBody(str.Body, badWords)
+	cleanBody := getCleanedBody(params.Body, badWords)
 
-	respondWithJSON(w, 200, cleaned{CleanedBody: cleanBody})
+	chirp, err := cfg.db.CreateChirp(req.Context(), database.CreateChirpParams{
+		Body:   cleanBody,
+		UserID: params.UserID,
+	})
+	if err != nil {
+		log.Printf("Error creating chirp: %s", err)
+		respondWithError(w, 500, "Internal Server Error")
+		return
+	}
+
+	respondWithJSON(w, 201, Chirp{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
+	})
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
@@ -130,6 +151,7 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request
 
 	user, err := cfg.db.CreateUser(req.Context(), params.Email)
 	if err != nil {
+		log.Printf("Error creating user: %s", err)
 		respondWithError(w, 500, "Internal Server Error")
 		return
 	}
