@@ -1,11 +1,14 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Sandro-GG/chirpy/internal/database"
 	"github.com/google/uuid"
@@ -24,14 +27,13 @@ func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, req *http.Request) {
 
 func (cfg *apiConfig) handlerReset(w http.ResponseWriter, req *http.Request) {
 	if cfg.platform != "dev" {
-		respondWithError(w, 403, "Forbidden")
+		respondWithError(w, http.StatusForbidden, "Forbidden", nil)
 		return
 	}
 
 	err := cfg.db.DeleteUsers(req.Context())
 	if err != nil {
-		log.Printf("Error deleting users: %s", err)
-		respondWithError(w, 500, "Something Went Wrong")
+		respondWithError(w, http.StatusInternalServerError, "Error deleting users", err)
 		return
 	}
 
@@ -46,15 +48,16 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 		UserID uuid.UUID `json:"user_id"`
 	}
 
-	type cleaned struct {
-		CleanedBody string `json:"cleaned_body"`
-	}
-
 	params := &toValidate{}
 	decoder := json.NewDecoder(req.Body)
 	err := decoder.Decode(params)
 	if err != nil {
-		respondWithError(w, 400, "Bad Request")
+		respondWithError(w, http.StatusBadRequest, "Bad Request", err)
+		return
+	}
+
+	if len(params.Body) > 140 {
+		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
 		return
 	}
 
@@ -64,24 +67,21 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 		"fornax":    {},
 	}
 
-	if len(params.Body) > 140 {
-		respondWithError(w, 400, "Chirp is too long")
-		return
-	}
-
 	cleanBody := getCleanedBody(params.Body, badWords)
 
 	chirp, err := cfg.db.CreateChirp(req.Context(), database.CreateChirpParams{
-		Body:   cleanBody,
-		UserID: params.UserID,
+		ID:        uuid.New(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+		Body:      cleanBody,
+		UserID:    params.UserID,
 	})
 	if err != nil {
-		log.Printf("Error creating chirp: %s", err)
-		respondWithError(w, 500, "Internal Server Error")
+		respondWithError(w, http.StatusInternalServerError, "Error creating chirp", err)
 		return
 	}
 
-	respondWithJSON(w, 201, Chirp{
+	respondWithJSON(w, http.StatusCreated, Chirp{
 		ID:        chirp.ID,
 		CreatedAt: chirp.CreatedAt,
 		UpdatedAt: chirp.UpdatedAt,
@@ -90,38 +90,84 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 	})
 }
 
-func respondWithError(w http.ResponseWriter, code int, msg string) {
-	type toError struct {
-		Error string `json:"error"`
+func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request) {
+	type parameters struct {
+		Email string `json:"email"`
 	}
 
-	errToReturn := toError{
-		Error: msg,
-	}
+	params := &parameters{}
 
-	dat, err := json.Marshal(errToReturn)
+	err := json.NewDecoder(req.Body).Decode(params)
 	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
-		w.WriteHeader(500)
+		respondWithError(w, http.StatusBadRequest, "Unable to decode JSON", err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	w.Write(dat)
+	user, err := cfg.db.CreateUser(req.Context(), params.Email)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error creating user", err)
+		return
+	}
+
+	responseUser := User{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+
+	respondWithJSON(w, http.StatusCreated, responseUser)
 }
 
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
-	res, err := json.Marshal(payload)
+func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request) {
+	dbChirps, err := cfg.db.GetChirps(req.Context())
 	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
-		w.WriteHeader(500)
+		respondWithError(w, http.StatusInternalServerError, "Couldn't retrieve chirps", err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	w.Write(res)
+	chirps := []Chirp{}
+
+	for _, dbChirp := range dbChirps {
+		chirps = append(chirps, Chirp{
+			ID:        dbChirp.ID,
+			CreatedAt: dbChirp.CreatedAt,
+			UpdatedAt: dbChirp.UpdatedAt,
+			Body:      dbChirp.Body,
+			UserID:    dbChirp.UserID,
+		})
+	}
+
+	respondWithJSON(w, http.StatusOK, chirps)
+}
+
+func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, req *http.Request) {
+	path := req.PathValue("chirpID")
+	parsedUUID, err := uuid.Parse(path)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Chirp doesn't exist", err)
+		return
+	}
+
+	dbChirp, err := cfg.db.GetChirp(req.Context(), parsedUUID)
+	if errors.Is(err, sql.ErrNoRows) {
+		respondWithError(w, http.StatusNotFound, "Chirp doesn't exist", err)
+		return
+	}
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't retrieve chirp", err)
+		return
+	}
+
+	chirp := Chirp{
+		ID:        dbChirp.ID,
+		CreatedAt: dbChirp.CreatedAt,
+		UpdatedAt: dbChirp.UpdatedAt,
+		Body:      dbChirp.Body,
+		UserID:    dbChirp.UserID,
+	}
+
+	respondWithJSON(w, http.StatusOK, chirp)
 }
 
 func getCleanedBody(text string, badWords map[string]struct{}) string {
@@ -136,32 +182,30 @@ func getCleanedBody(text string, badWords map[string]struct{}) string {
 	return strings.Join(words, " ")
 }
 
-func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request) {
-	type parameters struct {
-		Email string `json:"email"`
-	}
-
-	params := &parameters{}
-
-	err := json.NewDecoder(req.Body).Decode(params)
+func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
 	if err != nil {
-		respondWithError(w, 400, "Bad Request")
+		log.Println(err)
+	}
+	if code > 499 {
+		log.Printf("Responding with 5XX error: %s", msg)
+	}
+	type errorResponse struct {
+		Error string `json:"error"`
+	}
+	respondWithJSON(w, code, errorResponse{
+		Error: msg,
+	})
+}
+
+func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+	res, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	user, err := cfg.db.CreateUser(req.Context(), params.Email)
-	if err != nil {
-		log.Printf("Error creating user: %s", err)
-		respondWithError(w, 500, "Internal Server Error")
-		return
-	}
-
-	responseUser := User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
-	}
-
-	respondWithJSON(w, http.StatusCreated, responseUser)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(res)
 }
