@@ -20,6 +20,17 @@ func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, req *http.Request) {
 }
 
 func (cfg *apiConfig) handlerReset(w http.ResponseWriter, req *http.Request) {
+	if cfg.platform != "dev" {
+		respondWithError(w, 403, "Forbidden")
+		return
+	}
+
+	err := cfg.db.DeleteUsers(req.Context())
+	if err != nil {
+		respondWithError(w, 500, "Something Went Wrong")
+		return
+	}
+
 	cfg.fileserverHits.Store(0)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -102,4 +113,33 @@ func getCleanedBody(text string, badWords map[string]struct{}) string {
 	}
 
 	return strings.Join(words, " ")
+}
+
+func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request) {
+	type parameters struct {
+		Email string `json:"email"`
+	}
+
+	params := &parameters{}
+
+	err := json.NewDecoder(req.Body).Decode(params)
+	if err != nil {
+		respondWithError(w, 400, "Bad Request")
+		return
+	}
+
+	user, err := cfg.db.CreateUser(req.Context(), params.Email)
+	if err != nil {
+		respondWithError(w, 500, "Internal Server Error")
+		return
+	}
+
+	responseUser := User{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+
+	respondWithJSON(w, http.StatusCreated, responseUser)
 }
