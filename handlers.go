@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sandro-GG/chirpy/internal/auth"
 	"github.com/Sandro-GG/chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -92,7 +93,8 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 
 func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Email string `json:"email"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 
 	params := &parameters{}
@@ -103,7 +105,16 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	user, err := cfg.db.CreateUser(req.Context(), params.Email)
+	pwd, err := auth.HashPassword(params.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to hash password", err)
+		return
+	}
+
+	user, err := cfg.db.CreateUser(req.Context(), database.CreateUserParams{
+		Email:          params.Email,
+		HashedPassword: pwd,
+	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error creating user", err)
 		return
@@ -168,6 +179,41 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, req *http.Request) 
 	}
 
 	respondWithJSON(w, http.StatusOK, chirp)
+}
+
+func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
+	type parameters struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+
+	params := &parameters{}
+
+	err := json.NewDecoder(req.Body).Decode(params)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Unable to decode JSON", err)
+		return
+	}
+
+	dbUser, err := cfg.db.GetUserByEmail(req.Context(), params.Email)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
+		return
+	}
+
+	if ok, err := auth.CheckPasswordHash(params.Password, dbUser.HashedPassword); !ok || err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
+		return
+	}
+
+	user := &User{
+		ID:        dbUser.ID,
+		CreatedAt: dbUser.CreatedAt,
+		UpdatedAt: dbUser.UpdatedAt,
+		Email:     dbUser.Email,
+	}
+
+	respondWithJSON(w, http.StatusOK, user)
 }
 
 func getCleanedBody(text string, badWords map[string]struct{}) string {
