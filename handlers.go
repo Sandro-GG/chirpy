@@ -15,6 +15,12 @@ import (
 	"github.com/google/uuid"
 )
 
+var badWords = map[string]struct{}{
+	"kerfuffle": {},
+	"sharbert":  {},
+	"fornax":    {},
+}
+
 func (cfg *apiConfig) handlerMetrics(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	html := fmt.Sprintf(`<html>
@@ -73,18 +79,13 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	badWords := map[string]struct{}{
-		"kerfuffle": {},
-		"sharbert":  {},
-		"fornax":    {},
-	}
-
 	cleanBody := getCleanedBody(params.Body, badWords)
+	now := time.Now().UTC()
 
 	chirp, err := cfg.db.CreateChirp(req.Context(), database.CreateChirpParams{
 		ID:        uuid.New(),
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
+		CreatedAt: now,
+		UpdatedAt: now,
 		Body:      cleanBody,
 		UserID:    validUserID,
 	})
@@ -194,9 +195,8 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, req *http.Request) 
 
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Password         string `json:"password"`
-		Email            string `json:"email"`
-		ExpiresInSeconds int    `json:"expires_in_seconds"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 
 	params := &parameters{}
@@ -218,11 +218,8 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	duration := time.Duration(params.ExpiresInSeconds) * time.Second
-
-	if params.ExpiresInSeconds <= 0 || params.ExpiresInSeconds > 3600 {
-		duration = 1 * time.Hour
-	}
+	duration := 1 * time.Hour
+	now := time.Now().UTC()
 
 	token, err := auth.MakeJWT(dbUser.ID, cfg.secret, duration)
 	if err != nil {
@@ -230,25 +227,104 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	refToken := auth.MakeRefreshToken()
+	_, err = cfg.db.CreateRefreshToken(req.Context(), database.CreateRefreshTokenParams{
+		Token:     refToken,
+		CreatedAt: now,
+		UpdatedAt: now,
+		UserID:    dbUser.ID,
+		ExpiresAt: now.Add(60 * 24 * time.Hour),
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't save refresh token", err)
+		return
+	}
+
 	type response struct {
-		ID        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Email     string    `json:"email"`
-		Token     string    `json:"token"`
+		ID           uuid.UUID `json:"id"`
+		CreatedAt    time.Time `json:"created_at"`
+		UpdatedAt    time.Time `json:"updated_at"`
+		Email        string    `json:"email"`
+		Token        string    `json:"token"`
+		RefreshToken string    `json:"refresh_token"`
 	}
 
 	respondWithJSON(w, http.StatusOK, response{
-		ID:        dbUser.ID,
-		CreatedAt: dbUser.CreatedAt,
-		UpdatedAt: dbUser.UpdatedAt,
-		Email:     dbUser.Email,
-		Token:     token,
+		ID:           dbUser.ID,
+		CreatedAt:    dbUser.CreatedAt,
+		UpdatedAt:    dbUser.UpdatedAt,
+		Email:        dbUser.Email,
+		Token:        token,
+		RefreshToken: refToken,
 	})
 }
 
+func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, req *http.Request) {
+	refToken, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	tokenRow, err := cfg.db.GetUserFromRefreshToken(req.Context(), refToken)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	now := time.Now().UTC()
+	if tokenRow.ExpiresAt.Before(now) {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", errors.New("refresh token expired"))
+		return
+	}
+
+	if tokenRow.RevokedAt.Valid {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", errors.New("refresh token revoked"))
+		return
+	}
+
+	tokenStr, err := auth.MakeJWT(tokenRow.ID, cfg.secret, 1*time.Hour)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to make JWT", err)
+		return
+	}
+
+	type response struct {
+		Token string `json:"token"`
+	}
+
+	respondWithJSON(w, http.StatusOK, response{
+		Token: tokenStr,
+	})
+}
+
+func (cfg *apiConfig) handlerRevokeRefreshToken(w http.ResponseWriter, req *http.Request) {
+	refToken, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	now := time.Now().UTC()
+
+	err = cfg.db.RevokeRefreshToken(req.Context(), database.RevokeRefreshTokenParams{
+		Token: refToken,
+		RevokedAt: sql.NullTime{
+			Time:  now,
+			Valid: true,
+		},
+		UpdatedAt: now,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to revoke refresh token", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func getCleanedBody(text string, badWords map[string]struct{}) string {
-	words := strings.Fields(text)
+	words := strings.Split(text, " ")
 	for i, word := range words {
 		loweredWord := strings.ToLower(word)
 		if _, ok := badWords[loweredWord]; ok {
