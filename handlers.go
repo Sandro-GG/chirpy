@@ -323,6 +323,59 @@ func (cfg *apiConfig) handlerRevokeRefreshToken(w http.ResponseWriter, req *http
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (cfg *apiConfig) handlerUpdateEmailPassword(w http.ResponseWriter, req *http.Request) {
+	token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	type parameters struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	params := &parameters{}
+
+	err = json.NewDecoder(req.Body).Decode(params)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Unable to decode JSON", err)
+		return
+	}
+
+	userUUID, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	hash, err := auth.HashPassword(params.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to hash password", err)
+		return
+	}
+
+	updatedUser, err := cfg.db.UpdateUser(req.Context(), database.UpdateUserParams{
+		ID:             userUUID,
+		Email:          params.Email,
+		HashedPassword: hash,
+		UpdatedAt:      time.Now().UTC(),
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to update user", err)
+		return
+	}
+
+	user := &User{
+		ID:        updatedUser.ID,
+		CreatedAt: updatedUser.CreatedAt,
+		UpdatedAt: updatedUser.UpdatedAt,
+		Email:     updatedUser.Email,
+	}
+
+	respondWithJSON(w, http.StatusOK, user)
+}
+
 func getCleanedBody(text string, badWords map[string]struct{}) string {
 	words := strings.Split(text, " ")
 	for i, word := range words {
