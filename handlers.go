@@ -44,14 +44,25 @@ func (cfg *apiConfig) handlerReset(w http.ResponseWriter, req *http.Request) {
 }
 
 func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Request) {
+	token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	validUserID, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
 	type toValidate struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 
 	params := &toValidate{}
 	decoder := json.NewDecoder(req.Body)
-	err := decoder.Decode(params)
+	err = decoder.Decode(params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Bad Request", err)
 		return
@@ -75,7 +86,7 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
 		Body:      cleanBody,
-		UserID:    params.UserID,
+		UserID:    validUserID,
 	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error creating chirp", err)
@@ -183,8 +194,9 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, req *http.Request) 
 
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Password string `json:"password"`
-		Email    string `json:"email"`
+		Password         string `json:"password"`
+		Email            string `json:"email"`
+		ExpiresInSeconds int    `json:"expires_in_seconds"`
 	}
 
 	params := &parameters{}
@@ -206,14 +218,33 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	user := &User{
+	duration := time.Duration(params.ExpiresInSeconds) * time.Second
+
+	if params.ExpiresInSeconds <= 0 || params.ExpiresInSeconds > 3600 {
+		duration = 1 * time.Hour
+	}
+
+	token, err := auth.MakeJWT(dbUser.ID, cfg.secret, duration)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to make JWT", err)
+		return
+	}
+
+	type response struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Email     string    `json:"email"`
+		Token     string    `json:"token"`
+	}
+
+	respondWithJSON(w, http.StatusOK, response{
 		ID:        dbUser.ID,
 		CreatedAt: dbUser.CreatedAt,
 		UpdatedAt: dbUser.UpdatedAt,
 		Email:     dbUser.Email,
-	}
-
-	respondWithJSON(w, http.StatusOK, user)
+		Token:     token,
+	})
 }
 
 func getCleanedBody(text string, badWords map[string]struct{}) string {

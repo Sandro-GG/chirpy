@@ -119,3 +119,20 @@ func TestValidateJWT(t *testing.T) {
 		t.Errorf("Expected an error validating a token signed with the wrong secret")
 	}
 }
+
+func TestGetBearerToken(t *testing.T) {
+	headers := map[string][]string{
+		"Testing":       {"hello hi", "boom boom"},
+		"Spatula":       {"big", "bob", "squid clarinet"},
+		"Authorization": {"Bearer fasdck-fsdakv-fkadqew-fdass", "mod cod pod"},
+	}
+
+	token, err := GetBearerToken(headers)
+	if err != nil {
+		t.Fatalf("Failed to get token")
+	}
+
+	if token != "fasdck-fsdakv-fkadqew-fdass" {
+		t.Errorf("Failed to extract token correctly")
+	}
+}
