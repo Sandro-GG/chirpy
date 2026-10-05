@@ -376,6 +376,50 @@ func (cfg *apiConfig) handlerUpdateEmailPassword(w http.ResponseWriter, req *htt
 	respondWithJSON(w, http.StatusOK, user)
 }
 
+func (cfg *apiConfig) handlerDeleteChirp(w http.ResponseWriter, req *http.Request) {
+	token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
+		return
+	}
+
+	path := req.PathValue("chirpID")
+	parsedUUID, err := uuid.Parse(path)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Chirp doesn't exist", err)
+		return
+	}
+
+	dbChirp, err := cfg.db.GetChirp(req.Context(), parsedUUID)
+	if errors.Is(err, sql.ErrNoRows) {
+		respondWithError(w, http.StatusNotFound, "Chirp doesn't exist", err)
+		return
+	}
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't retrieve chirp", err)
+		return
+	}
+
+	if userID != dbChirp.UserID {
+		respondWithError(w, http.StatusForbidden, "Forbidden", err)
+		return
+	}
+
+	err = cfg.db.DeleteChirp(req.Context(), parsedUUID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to delete chirp", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func getCleanedBody(text string, badWords map[string]struct{}) string {
 	words := strings.Split(text, " ")
 	for i, word := range words {
