@@ -42,10 +42,11 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request
 	}
 
 	responseUser := User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
+		ID:          user.ID,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+		Email:       user.Email,
+		IsChirpyRed: user.IsChirpyRed,
 	}
 
 	respondWithJSON(w, http.StatusCreated, responseUser)
@@ -105,6 +106,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 		Email        string    `json:"email"`
 		Token        string    `json:"token"`
 		RefreshToken string    `json:"refresh_token"`
+		IsChirpyRed  bool      `json:"is_chirpy_red"`
 	}
 
 	respondWithJSON(w, http.StatusOK, response{
@@ -114,6 +116,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 		Email:        dbUser.Email,
 		Token:        token,
 		RefreshToken: refToken,
+		IsChirpyRed:  dbUser.IsChirpyRed,
 	})
 }
 
@@ -225,11 +228,45 @@ func (cfg *apiConfig) handlerUpdateEmailPassword(w http.ResponseWriter, req *htt
 	}
 
 	user := &User{
-		ID:        updatedUser.ID,
-		CreatedAt: updatedUser.CreatedAt,
-		UpdatedAt: updatedUser.UpdatedAt,
-		Email:     updatedUser.Email,
+		ID:          updatedUser.ID,
+		CreatedAt:   updatedUser.CreatedAt,
+		UpdatedAt:   updatedUser.UpdatedAt,
+		Email:       updatedUser.Email,
+		IsChirpyRed: updatedUser.IsChirpyRed,
 	}
 
 	respondWithJSON(w, http.StatusOK, user)
+}
+
+func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, req *http.Request) {
+	type parameters struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserID uuid.UUID `json:"user_id"`
+		} `json:"data"`
+	}
+
+	params := &parameters{}
+	err := json.NewDecoder(req.Body).Decode(params)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Unable to decode JSON", err)
+		return
+	}
+
+	if params.Event != "user.upgraded" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	_, err = cfg.db.UpgradeUser(req.Context(), params.Data.UserID)
+	if errors.Is(err, sql.ErrNoRows) {
+		respondWithError(w, http.StatusNotFound, "User was not found", err)
+		return
+	}
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to upgrade user", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
