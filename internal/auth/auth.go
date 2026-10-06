@@ -62,16 +62,16 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 }
 
 func GetBearerToken(headers http.Header) (string, error) {
-	authInfo := headers.Get("Authorization")
-	if authInfo == "" {
+	auth := headers.Get("Authorization")
+	if auth == "" {
 		return "", errors.New("no authorization header included")
 	}
 
-	if !strings.HasPrefix(authInfo, "Bearer ") {
+	if !strings.HasPrefix(auth, "Bearer ") {
 		return "", errors.New("malformed authorization header")
 	}
 
-	token := strings.TrimPrefix(authInfo, "Bearer ")
+	token := strings.TrimPrefix(auth, "Bearer ")
 
 	return token, nil
 }
@@ -82,4 +82,19 @@ func MakeRefreshToken() string {
 	rand.Read(key)
 
 	return hex.EncodeToString(key)
+}
+
+func GetAPIKey(headers http.Header) (string, error) {
+	auth := headers.Get("Authorization")
+	if auth == "" {
+		return "", errors.New("no authorization header included")
+	}
+
+	if !strings.HasPrefix(auth, "ApiKey ") {
+		return "", errors.New("malformed authorization header")
+	}
+
+	apiKey := strings.TrimPrefix(auth, "ApiKey ")
+
+	return apiKey, nil
 }

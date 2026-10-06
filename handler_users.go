@@ -239,6 +239,17 @@ func (cfg *apiConfig) handlerUpdateEmailPassword(w http.ResponseWriter, req *htt
 }
 
 func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, req *http.Request) {
+	apiKey, err := auth.GetAPIKey(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Unable to check API key", err)
+		return
+	}
+
+	if apiKey != cfg.polkaKey {
+		respondWithError(w, http.StatusUnauthorized, "API keys don't match", nil)
+		return
+	}
+
 	type parameters struct {
 		Event string `json:"event"`
 		Data  struct {
@@ -247,7 +258,7 @@ func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, req *http.Reques
 	}
 
 	params := &parameters{}
-	err := json.NewDecoder(req.Body).Decode(params)
+	err = json.NewDecoder(req.Body).Decode(params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Unable to decode JSON", err)
 		return
