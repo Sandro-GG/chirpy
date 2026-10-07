@@ -9,7 +9,7 @@ Chirpy is a lightweight RESTful API server built in Go for a micro-blogging plat
 - **Chirp Management**: Create, view, and delete short text posts (chirps) with profanity masking.
 - **Database Storage**: PostgreSQL integration using `sqlc` for compile-time safe database queries.
 - **Webhooks**: Integration endpoint to upgrade users to "Chirpy Red" status.
-- **Metrics**: Administrative endpoints to track hits and server health..
+- **Metrics**: Administrative endpoints to track hits and server health.
 
 ## Tech Stack
 
