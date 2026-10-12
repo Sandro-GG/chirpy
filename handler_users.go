@@ -80,7 +80,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 	duration := 1 * time.Hour
 	now := time.Now().UTC()
 
-	token, err := auth.MakeJWT(dbUser.ID, cfg.secret, duration)
+	token, err := auth.MakeJWT(dbUser.ID, cfg.jwtSecret, duration)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to make JWT", err)
 		return
@@ -144,7 +144,7 @@ func (cfg *apiConfig) handlerRefresh(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	tokenStr, err := auth.MakeJWT(tokenRow.ID, cfg.secret, 1*time.Hour)
+	tokenStr, err := auth.MakeJWT(tokenRow.ID, cfg.jwtSecret, 1*time.Hour)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to make JWT", err)
 		return
@@ -204,7 +204,7 @@ func (cfg *apiConfig) handlerUpdateEmailPassword(w http.ResponseWriter, req *htt
 		return
 	}
 
-	userUUID, err := auth.ValidateJWT(token, cfg.secret)
+	userUUID, err := auth.ValidateJWT(token, cfg.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
 		return

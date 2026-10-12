@@ -19,7 +19,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	db             *database.Queries
 	platform       string
-	secret         string
+	jwtSecret      string
 	polkaKey       string
 }
 
@@ -42,6 +42,16 @@ type Chirp struct {
 func main() {
 	godotenv.Load()
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET environment variable is required")
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
 	dbURL := os.Getenv("DB_URL")
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -61,7 +71,7 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		db:             dbQueries,
 		platform:       os.Getenv("PLATFORM"),
-		secret:         os.Getenv("SECRET"),
+		jwtSecret:      jwtSecret,
 		polkaKey:       os.Getenv("POLKA_KEY"),
 	}
 
@@ -80,7 +90,7 @@ func main() {
 	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.handlerUpgradeUser)
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
 
-	fmt.Println("Started Server...")
+	fmt.Printf("Started Server on port %s...\n", port)
 	log.Fatal(server.ListenAndServe())
 }
 

@@ -4,7 +4,7 @@ Chirpy is a lightweight RESTful API server built in Go for a micro-blogging plat
 
 ## Features
 
-- **User Management**: Secure password hashing with `bcrypt` and JWT-based authentication.
+- **User Management**: Secure password hashing with `argon2id` and JWT-based authentication.
 - **Refresh Tokens**: Revocable refresh token flow for persistent user sessions.
 - **Chirp Management**: Create, view, and delete short text posts (chirps) with profanity masking.
 - **Database Storage**: PostgreSQL integration using `sqlc` for compile-time safe database queries.
