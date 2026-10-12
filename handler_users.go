@@ -196,9 +196,9 @@ func (cfg *apiConfig) handlerRevokeRefreshToken(w http.ResponseWriter, req *http
 }
 
 func (cfg *apiConfig) handlerUpdateEmailPassword(w http.ResponseWriter, req *http.Request) {
-	token, err := auth.GetBearerToken(req.Header)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
+	userID, ok := getUserIDFromContext(req)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
 		return
 	}
 
@@ -209,7 +209,7 @@ func (cfg *apiConfig) handlerUpdateEmailPassword(w http.ResponseWriter, req *htt
 
 	params := &parameters{}
 
-	err = json.NewDecoder(req.Body).Decode(params)
+	err := json.NewDecoder(req.Body).Decode(params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Unable to decode JSON", err)
 		return
@@ -220,12 +220,6 @@ func (cfg *apiConfig) handlerUpdateEmailPassword(w http.ResponseWriter, req *htt
 		return
 	}
 
-	userUUID, err := auth.ValidateJWT(token, cfg.jwtSecret)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
-		return
-	}
-
 	hash, err := auth.HashPassword(params.Password)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to hash password", err)
@@ -233,7 +227,7 @@ func (cfg *apiConfig) handlerUpdateEmailPassword(w http.ResponseWriter, req *htt
 	}
 
 	updatedUser, err := cfg.db.UpdateUser(req.Context(), database.UpdateUserParams{
-		ID:             userUUID,
+		ID:             userID,
 		Email:          params.Email,
 		HashedPassword: hash,
 		UpdatedAt:      time.Now().UTC(),

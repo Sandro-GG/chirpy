@@ -9,21 +9,14 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/Sandro-GG/chirpy/internal/auth"
 	"github.com/Sandro-GG/chirpy/internal/database"
 	"github.com/google/uuid"
 )
 
 func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Request) {
-	token, err := auth.GetBearerToken(req.Header)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
-		return
-	}
-
-	validUserID, err := auth.ValidateJWT(token, cfg.jwtSecret)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
+	userID, ok := getUserIDFromContext(req)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
 		return
 	}
 
@@ -33,7 +26,7 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 
 	params := &toValidate{}
 	decoder := json.NewDecoder(req.Body)
-	err = decoder.Decode(params)
+	err := decoder.Decode(params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Bad Request", err)
 		return
@@ -52,7 +45,7 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 		CreatedAt: now,
 		UpdatedAt: now,
 		Body:      cleanBody,
-		UserID:    validUserID,
+		UserID:    userID,
 	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Error creating chirp", err)
@@ -142,15 +135,9 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, req *http.Request) 
 }
 
 func (cfg *apiConfig) handlerDeleteChirp(w http.ResponseWriter, req *http.Request) {
-	token, err := auth.GetBearerToken(req.Header)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
-		return
-	}
-
-	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
-	if err != nil {
-		respondWithError(w, http.StatusUnauthorized, "Unauthorized", err)
+	userID, ok := getUserIDFromContext(req)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Unauthorized", nil)
 		return
 	}
 
