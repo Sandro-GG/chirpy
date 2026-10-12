@@ -31,7 +31,7 @@ Chirpy is a lightweight RESTful API server built in Go for a micro-blogging plat
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/<your-username>/chirpy.git
+   git clone https://github.com/sandro-gg/chirpy.git
    cd chirpy
    ```
 
