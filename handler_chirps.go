@@ -75,9 +75,17 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request)
 			return
 		}
 
-		dbChirps, err = cfg.db.GetChirpsByAuthor(req.Context(), parsedUUID)
+		if sortReq == "desc" {
+			dbChirps, err = cfg.db.GetChirpsByAuthorDesc(req.Context(), parsedUUID)
+		} else {
+			dbChirps, err = cfg.db.GetChirpsByAuthor(req.Context(), parsedUUID)
+		}
 	} else {
-		dbChirps, err = cfg.db.GetChirps(req.Context())
+		if sortReq == "desc" {
+			dbChirps, err = cfg.db.GetChirpsDesc(req.Context())
+		} else {
+			dbChirps, err = cfg.db.GetChirps(req.Context())
+		}
 	}
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't retrieve chirps", err)
