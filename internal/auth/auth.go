@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -42,10 +43,18 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	claims := &jwt.RegisteredClaims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
 		return []byte(tokenSecret), nil
 	})
 	if err != nil {
 		return uuid.UUID{}, err
+	}
+
+	issuer, err := token.Claims.GetIssuer()
+	if err != nil || issuer != "chirpy-access" {
+		return uuid.UUID{}, errors.New("invalid issuer")
 	}
 
 	id, err := token.Claims.GetSubject()

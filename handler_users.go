@@ -10,6 +10,7 @@ import (
 	"github.com/Sandro-GG/chirpy/internal/auth"
 	"github.com/Sandro-GG/chirpy/internal/database"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request) {
@@ -26,6 +27,11 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request
 		return
 	}
 
+	if params.Email == "" || params.Password == "" {
+		respondWithError(w, http.StatusBadRequest, "Email and password cannot be empty", nil)
+		return
+	}
+
 	pwd, err := auth.HashPassword(params.Password)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Unable to hash password", err)
@@ -37,6 +43,11 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request
 		HashedPassword: pwd,
 	})
 	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			respondWithError(w, http.StatusConflict, "User with this email already exists", err)
+			return
+		}
 		respondWithError(w, http.StatusInternalServerError, "Error creating user", err)
 		return
 	}
@@ -201,6 +212,11 @@ func (cfg *apiConfig) handlerUpdateEmailPassword(w http.ResponseWriter, req *htt
 	err = json.NewDecoder(req.Body).Decode(params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Unable to decode JSON", err)
+		return
+	}
+
+	if params.Email == "" || params.Password == "" {
+		respondWithError(w, http.StatusBadRequest, "Email and password cannot be empty", nil)
 		return
 	}
 
