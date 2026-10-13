@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"sort"
 	"time"
 	"unicode/utf8"
 
@@ -101,12 +100,6 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request)
 			UpdatedAt: dbChirp.UpdatedAt,
 			Body:      dbChirp.Body,
 			UserID:    dbChirp.UserID,
-		})
-	}
-
-	if sortReq == "desc" {
-		sort.Slice(chirps, func(i, j int) bool {
-			return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
 		})
 	}
 

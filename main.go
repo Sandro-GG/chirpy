@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -59,11 +60,12 @@ func main() {
 		return
 	}
 
+	db.PingContext(context.Background())
 	dbQueries := database.New(db)
 
 	mux := http.NewServeMux()
 	server := http.Server{
-		Addr:    ":8080",
+		Addr:    ":" + port,
 		Handler: mux,
 	}
 
