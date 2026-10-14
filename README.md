@@ -36,14 +36,18 @@ Chirpy is a lightweight RESTful API server built in Go for a micro-blogging plat
    ```
 
 2. **Configure environment variables:**
-   Create a `.env` file in the root directory:
+   Create your `.env` file in the root directory by copying the example template:
+
+   ```bash
+   cp .env.example .env
+   ```
 
    ```env
-   PORT=8080
-   DB_URL=postgres://<username>:<password>@localhost:5432/chirpy?sslmode=disable
+   DB_URL=your_db_url_here
    PLATFORM=dev
-   JWT_SECRET=your_jwt_secret_key
-   POLKA_KEY=your_polka_api_key
+   JWT_SECRET=your_secret_here
+   POLKA_KEY=your_key_here
+   PORT=your_port_here
    ```
 
 3. **Run database migrations:**
