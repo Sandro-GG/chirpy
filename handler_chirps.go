@@ -31,6 +31,10 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	if utf8.RuneCountInString(params.Body) < 1 {
+		respondWithError(w, http.StatusBadRequest, "Chirp must be at least 1 character long", nil)
+		return
+	}
 	if utf8.RuneCountInString(params.Body) > 140 {
 		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
 		return
