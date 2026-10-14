@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -233,6 +234,11 @@ func (cfg *apiConfig) handlerUpdateEmailPassword(w http.ResponseWriter, req *htt
 		UpdatedAt:      time.Now().UTC(),
 	})
 	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			respondWithError(w, http.StatusConflict, "User with this email already exists", err)
+			return
+		}
 		respondWithError(w, http.StatusInternalServerError, "Unable to update user", err)
 		return
 	}
@@ -255,7 +261,7 @@ func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	if apiKey != cfg.polkaKey {
+	if cfg.polkaKey == "" || subtle.ConstantTimeCompare([]byte(apiKey), []byte(cfg.polkaKey)) != 1 {
 		respondWithError(w, http.StatusUnauthorized, "API keys don't match", nil)
 		return
 	}

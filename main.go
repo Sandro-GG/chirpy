@@ -60,7 +60,11 @@ func main() {
 		return
 	}
 
-	db.PingContext(context.Background())
+	err = db.PingContext(context.Background())
+	if err != nil {
+		log.Fatalf("unable to verify connection: %s", err)
+		return
+	}
 	dbQueries := database.New(db)
 
 	mux := http.NewServeMux()
