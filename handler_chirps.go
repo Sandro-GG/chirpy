@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -31,7 +32,7 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	if utf8.RuneCountInString(params.Body) < 1 {
+	if utf8.RuneCountInString(strings.TrimSpace(params.Body)) < 1 {
 		respondWithError(w, http.StatusBadRequest, "Chirp must be at least 1 character long", nil)
 		return
 	}
