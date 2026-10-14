@@ -53,13 +53,7 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	responseUser := User{
-		ID:          user.ID,
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
-		Email:       user.Email,
-		IsChirpyRed: user.IsChirpyRed,
-	}
+	responseUser := mapUser(user)
 
 	respondWithJSON(w, http.StatusCreated, responseUser)
 }
@@ -247,13 +241,7 @@ func (cfg *apiConfig) handlerUpdateEmailPassword(w http.ResponseWriter, req *htt
 		return
 	}
 
-	user := &User{
-		ID:          updatedUser.ID,
-		CreatedAt:   updatedUser.CreatedAt,
-		UpdatedAt:   updatedUser.UpdatedAt,
-		Email:       updatedUser.Email,
-		IsChirpyRed: updatedUser.IsChirpyRed,
-	}
+	user := mapUser(updatedUser)
 
 	respondWithJSON(w, http.StatusOK, user)
 }
@@ -300,4 +288,14 @@ func (cfg *apiConfig) handlerUpgradeUser(w http.ResponseWriter, req *http.Reques
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func mapUser(user database.User) User {
+	return User{
+		ID:          user.ID,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+		Email:       user.Email,
+		IsChirpyRed: user.IsChirpyRed,
+	}
 }

@@ -63,7 +63,35 @@ Chirpy is a lightweight RESTful API server built in Go for a micro-blogging plat
    go build -o out && ./out
    ```
 
-The server should now be running on `http://localhost:8080`.
+The server should now be running on your configured port (default 8080).
+
+## Example Usage
+
+Here is how you can test the core workflows locally using `curl`:
+
+1. **Register a new user:**
+
+   ```bash
+   curl -X POST http://localhost:8080/api/users \
+     -H "Content-Type: application/json" \
+     -d '{"email": "sandro@example.com", "password": "mypassword123"}'
+   ```
+
+2. **Log in to receive your access token:**
+
+   ```bash
+   curl -X POST http://localhost:8080/api/login \
+      -H "Content-Type: application/json" \
+      -d '{"email": "sandro@example.com", "password": "mypassword123"}'
+   ```
+
+3. **Create an authenticated chirp (replace <YOUR_ACCESS_TOKEN> with the token from login):**
+   ```bash
+   curl -X POST http://localhost:8080/api/chirps \
+      -H "Authorization: Bearer <YOUR_ACCESS_TOKEN>" \
+      -H "Content-Type: application/json" \
+      -d '{"body": "This is my first portfolio chirp!"}'
+   ```
 
 ## API Endpoints Overview
 

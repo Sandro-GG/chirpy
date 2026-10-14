@@ -57,14 +57,13 @@ func main() {
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("unable to open database: %s", err)
-		return
 	}
 
 	err = db.PingContext(context.Background())
 	if err != nil {
 		log.Fatalf("unable to verify connection: %s", err)
-		return
 	}
+	defer db.Close()
 	dbQueries := database.New(db)
 
 	mux := http.NewServeMux()
