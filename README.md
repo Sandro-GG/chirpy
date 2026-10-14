@@ -22,7 +22,7 @@ Chirpy is a lightweight RESTful API server built in Go for a micro-blogging plat
 
 ### Prerequisites
 
-- Go (1.22 or later)
+- Go (1.26.0 or later)
 - PostgreSQL
 - Goose (for database migrations)
 
