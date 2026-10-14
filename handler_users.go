@@ -79,8 +79,12 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	dbUser, err := cfg.db.GetUserByEmail(req.Context(), params.Email)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
 		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
+		return
+	}
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Unable to get user from database", err)
 		return
 	}
 

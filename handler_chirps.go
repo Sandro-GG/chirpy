@@ -51,13 +51,7 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	respondWithJSON(w, http.StatusCreated, Chirp{
-		ID:        chirp.ID,
-		CreatedAt: chirp.CreatedAt,
-		UpdatedAt: chirp.UpdatedAt,
-		Body:      chirp.Body,
-		UserID:    chirp.UserID,
-	})
+	respondWithJSON(w, http.StatusCreated, mapChirp(chirp))
 }
 
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request) {
@@ -94,13 +88,7 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, req *http.Request)
 	chirps := []Chirp{}
 
 	for _, dbChirp := range dbChirps {
-		chirps = append(chirps, Chirp{
-			ID:        dbChirp.ID,
-			CreatedAt: dbChirp.CreatedAt,
-			UpdatedAt: dbChirp.UpdatedAt,
-			Body:      dbChirp.Body,
-			UserID:    dbChirp.UserID,
-		})
+		chirps = append(chirps, mapChirp(dbChirp))
 	}
 
 	respondWithJSON(w, http.StatusOK, chirps)
@@ -124,13 +112,7 @@ func (cfg *apiConfig) handlerGetChirp(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	chirp := Chirp{
-		ID:        dbChirp.ID,
-		CreatedAt: dbChirp.CreatedAt,
-		UpdatedAt: dbChirp.UpdatedAt,
-		Body:      dbChirp.Body,
-		UserID:    dbChirp.UserID,
-	}
+	chirp := mapChirp(dbChirp)
 
 	respondWithJSON(w, http.StatusOK, chirp)
 }
@@ -171,4 +153,14 @@ func (cfg *apiConfig) handlerDeleteChirp(w http.ResponseWriter, req *http.Reques
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func mapChirp(chirp database.Chirp) Chirp {
+	return Chirp{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
+	}
 }
